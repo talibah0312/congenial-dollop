@@ -6,8 +6,8 @@ import time
 # Load variables from .env file
 load_dotenv()
 
-OWNER = '4f06zwqg'
-REPO = 'ideal-octo-broccoli'
+OWNER = 'talibah0312'
+REPO = 'congenial-dollop'
 WORKFLOW = 'main.yml'
 REF = 'main'
 PAT = os.getenv('PATSECRET')  # generate at github.com/settings/tokens
