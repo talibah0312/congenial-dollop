@@ -1,0 +1,58 @@
+name: Windows RDP (Browser Login)
+
+on:
+  workflow_dispatch:
+  
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Enable RDP & Firewall Rules
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+
+      - name: Create RDP User
+        run: |
+          # Hardcoded to bypass generation errors but still pass Windows complexity rules
+          $Password = "RootUser123!"
+          net user RDP $Password /add
+          net localgroup administrators RDP /add
+
+      - name: Install Tailscale
+        run: |
+          # Swapped to the .exe link because Tailscale removed the .msi direct link
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe"
+          Start-Process -FilePath "tailscale-setup.exe" -ArgumentList "/quiet" -Wait
+      - name: Create .env file
+        run: |
+           pip install python-dotenv
+           pip install requests
+           pip install rich
+           touch .env
+           echo PATSECRET=${{ secrets.PATSECRET }} >> .env
+      - name: Start Tailscale 
+        shell: pwsh
+        run: |
+          $cpu = (Get-CimInstance Win32_Processor).Name
+          Write-Host "Processor: $cpu"
+          if ($cpu -match "Intel") {
+          $hostname = "cat-Intel-$env:GITHUB_RUN_ID"
+          } elseif ($cpu -match "AMD") {
+          $hostname = "cat-Amd-$env:GITHUB_RUN_ID"
+          } else {
+          $firstName = ($cpu -split '\s+')[0]
+          $hostname = "cat-$firstName-$env:GITHUB_RUN_ID"
+          }
+          Write-Host "Hostname: $hostname"
+          & "C:\Program Files\Tailscale\tailscale.exe" up `
+          --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} `
+          --hostname="$hostname"
+
+      - name: Keep Session Alive
+        run: |
+          echo "RDP Session is active."
+          python main.py
+          while ($true) { Start-Sleep -Seconds 300 }
